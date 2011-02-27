@@ -1,3 +1,6 @@
 [submodule "avr/muc"]
 	path = avr/muc
 	url = https://jmesmon@github.com/jmesmon/libmuc.git
+[submodule "half_jackal"]
+	path = half_jackal
+	url = https://jmesmon@github.com/jmesmon/half_jackal.git
