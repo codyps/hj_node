@@ -7,7 +7,8 @@
 #include <boost/asio.hpp>
 #include <boost/thread.hpp>
 
-#include <frame_async.h>
+#include <half_jackal/pc/frame_async.h>
+#include <half_jackal/hj_proto.h>
 
 #include <termios.h>
 #include <unistd.h>

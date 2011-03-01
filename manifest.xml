@@ -1,11 +1,10 @@
+<!-- ex: set sw=2 ts=2: -->
 <package>
   <description brief="half_jackal">
-
-     half_jackal
-
+	half_jackal
   </description>
   <author>Cody Schafer</author>
-  <license>BSD</license>
+  <license>GPLv3</license>
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/half_jackal</url>
 
@@ -14,6 +13,10 @@
   <depend package="geometry_msgs"/>
   <depend package="nav_msgs"/>
   <depend package="tf"/>
+
+	<export> 
+		<cpp cflags="-I${prefix}/half_jackal/pc" />
+	</export> 
 </package>
 
 
