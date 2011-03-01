@@ -132,7 +132,7 @@ def calculateWheelVel(self, cmdVel):
      return leftVel, rightVel
 */
 
-void hj_to_info(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
+static void hj_to_info(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
 {
 	i->current = h->current;
 	i->enc_ct = h->enc_ct;
@@ -140,6 +140,8 @@ void hj_to_info(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
 	i->vel = h->vel;
 }
 
+static boost::mutex old_speed_mutex;
+static struct hjb_pkt_set_speed old_speed;
 
 static void recv_thread(FILE *sf)
 {
@@ -165,7 +167,18 @@ static void recv_thread(FILE *sf)
 						len, HJA_PL_TIMEOUT);
 				continue;
 			}
-			/* TODO: send something so the chip doesn't shut down */
+			/* resend motor values so the chip doesn't shut down */
+			struct hjb_pkt_set_speed ss;
+			{
+				boost::lock_guard<boost::mutex> l(old_speed_mutex);
+				ss = old_speed;
+			}
+			frame_send(sf, &ss, HJB_PL_SET_SPEED);
+
+			/* XXX: hack: also request info */
+			struct hjb_pkt_req_info ri;
+			ri.head.type = HJB_PT_REQ_INFO;
+			frame_send(sf, &ri, HJB_PL_REQ_INFO);
 
 			break;
 		}
@@ -195,6 +208,7 @@ static void recv_thread(FILE *sf)
 	}
 }
 
+
 /* direction_sub - subscriber callback for a direction message */
 static void direction_sub(const hj_node::Motors::ConstPtr &msg,
 		FILE *sf)
@@ -205,6 +219,11 @@ static void direction_sub(const hj_node::Motors::ConstPtr &msg,
 	ss.vel[0] = msg->vel[1];
 
 	frame_send(sf, &ss, HJB_PL_SET_SPEED);
+
+	{
+		boost::lock_guard<boost::mutex> l(old_speed_mutex);
+		old_speed = ss;
+	}
 }
 
 int main(int argc, char **argv)
