@@ -146,8 +146,8 @@ static void recv_thread(FILE *sf)
 
 	uint8_t buf[1024];
 	while(n.ok()){
-		ssize_t s = frame_recv(sf, buf, sizeof(buf));
-		if (!s) {
+		ssize_t len = frame_recv(sf, buf, sizeof(buf));
+		if (len < 0) {
 			ROS_WARN("frame_recv returned %zd", s);
 			continue;
 		}
@@ -174,10 +174,10 @@ static void recv_thread(FILE *sf)
 
 			/* TODO: publish it */
 #if 0
-			a_current.publish(??);
-			b_current.publish(??);
-			a_enc.publish(??);
-			b_enc.publish(??);
+			a_current.publish();
+			b_current.publish();
+			a_enc.publish();
+			b_enc.publish();
 #endif
 
 			break;
