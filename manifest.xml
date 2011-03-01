@@ -1,21 +1,24 @@
 <!-- ex: set sw=2 ts=2: -->
 <package>
-  <description brief="half_jackal">
-	half_jackal
+  <description brief="hj_node">
+	half_jackal ros node.
   </description>
   <author>Cody Schafer</author>
   <license>GPLv3</license>
   <review status="unreviewed" notes=""/>
-  <url>http://ros.org/wiki/half_jackal</url>
+	<url>https://github.com/jmesmon/hj_node</url>
 
-  <depend package="roscpp"/>
+	<depend package="roscpp"/>
   <depend package="std_msgs"/>
   <depend package="geometry_msgs"/>
   <depend package="nav_msgs"/>
   <depend package="tf"/>
 
+	<versioncontrol type="git"
+		url="https://github.com/jmesmon/hj_node" />
+
 	<export> 
-		<cpp cflags="-I${prefix}/half_jackal/pc" />
+		<cpp cflags="-Wno-missing-field-initializers" />
 	</export> 
 </package>
 

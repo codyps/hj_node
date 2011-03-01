@@ -1,14 +1,13 @@
 #include <ros/ros.h>
-#include <tf/transform_broadcaster.h>
-#include <nav_msgs/Odometry.h>
 
 #include <sstream>
 
-#include <boost/asio.hpp>
 #include <boost/thread.hpp>
 
-#include <half_jackal/pc/frame_async.h>
-#include <half_jackal/hj_proto.h>
+#include <frame_async.h>
+#include <hj_proto.h>
+
+#include <hj_node/InfoPair.h>
 
 #include <termios.h>
 #include <unistd.h>
@@ -128,28 +127,28 @@ def calculateWheelVel(self, cmdVel):
      return leftVel, rightVel
 */
 
-static void handle_pkt(void *data, size_t dlen, ros::Time time, FILE *sf)
+void hj_to_info(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
 {
+	i->current = h->current;
+	i->enc_ct = h->enc_ct;
+	i->pwr = h->pwr;
+	i->vel = h->vel;
 }
 
 
 static void recv_thread(FILE *sf)
 {
-	/* TODO: this is presently example code. */
 	ros::NodeHandle n;
-	ros::Publisher a_current = n.advertise<std_msgs::Int>("a/current", 1);
-	ros::Publisher b_current = n.advertise<std_msgs::Int>("b/current", 1);
-
-	ros::Publisher a_enc = n.advertise<std_msgs::Int>("a/enc_ticks", 1);
-	ros::Publisher b_enc = n.advertise<std_msgs::Int>("b/enc_ticks", 1);
+	ros::Publisher ip = n.advertise<hj_node::InfoPair>("info", 1);
 
 	ros::Time current_time;
 
 	uint8_t buf[1024];
+	struct hj_pktc_header *h = (typeof(h))buf;
 	while(n.ok()){
 		ssize_t len = frame_recv(sf, buf, sizeof(buf));
 		if (len < 0) {
-			ROS_WARN("frame_recv returned %zd", s);
+			ROS_WARN("frame_recv returned %zd", len);
 			continue;
 		}
 
@@ -173,13 +172,12 @@ static void recv_thread(FILE *sf)
 			}
 			struct hja_pkt_info *inf = (typeof(inf)) buf;
 
-			/* TODO: publish it */
-#if 0
-			a_current.publish();
-			b_current.publish();
-			a_enc.publish();
-			b_enc.publish();
-#endif
+			/* publish it */
+			hj_node::InfoPair ipd;
+			hj_to_info(&ipd.info[0], &inf->a);
+			hj_to_info(&ipd.info[1], &inf->b);
+
+			ip.publish(ipd);
 
 			break;
 		}
@@ -193,7 +191,7 @@ static void recv_thread(FILE *sf)
 }
 
 /* direction_sub - subscriber callback for a direction message */
-static void direction_sub(const motor_msgs::MotorPairSpeed::ConstPtr& msg,
+static void direction_sub(const hj_node::Motors::ConstPtr& msg,
 		FILE *sf)
 {
 	struct hjb_pkt_set_speed ss =
