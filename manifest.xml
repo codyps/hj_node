@@ -10,9 +10,6 @@
 
 	<depend package="roscpp"/>
   <depend package="std_msgs"/>
-  <depend package="geometry_msgs"/>
-  <depend package="nav_msgs"/>
-  <depend package="tf"/>
 
 	<versioncontrol type="git"
 		url="https://github.com/jmesmon/hj_node" />

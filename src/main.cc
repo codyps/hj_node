@@ -8,9 +8,14 @@
 #include <hj_proto.h>
 
 #include <hj_node/InfoPair.h>
+#include <hj_node/Motors.h>
 
 #include <termios.h>
 #include <unistd.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 static int serial_conf(int fd, speed_t speed)
 {
@@ -191,11 +196,13 @@ static void recv_thread(FILE *sf)
 }
 
 /* direction_sub - subscriber callback for a direction message */
-static void direction_sub(const hj_node::Motors::ConstPtr& msg,
+static void direction_sub(const hj_node::MotorsConstPtr &msg,
 		FILE *sf)
 {
-	struct hjb_pkt_set_speed ss =
-		HJB_PKT_SET_SPEED_INITIALIZER(msg.vel[0], msg.vel[1]);
+	struct hjb_pkt_set_speed ss;
+	ss.head.type = HJB_PT_SET_SPEED;
+	ss.vel[0] = msg->vel[0];
+	ss.vel[0] = msg->vel[1];
 
 	frame_send(sf, &ss, HJB_PL_SET_SPEED);
 }
@@ -207,33 +214,34 @@ int main(int argc, char **argv)
 	ros::NodeHandle n;
 	ros::NodeHandle n_priv("~");
 
-	std::string serial_port
+	std::string serial_port;
 	if (!n_priv.getParam("serial_port", serial_port)) {
 		ROS_ERROR("no serial port specified for param \"serial_port\"");
 		return -1;
 	}
 
-	int sfd = open(serial_port, O_RDWR);
+	int sfd = open(serial_port.c_str(), O_RDWR);
 	if (sfd < 0) {
-		ROS_ERROR("open: %s: %s", serial_port, strerror(errno));
+		ROS_ERROR("open: %s: %s", serial_port.c_str(), strerror(errno));
 		return -1;
 	}
 
 	int ret = serial_conf(sfd, B57600);
 	if (ret < 0) {
-		ROS_ERROR("serial_conf: %s: %s", serial_port, strerror(errno));
+		ROS_ERROR("serial_conf: %s: %s", serial_port.c_str(),
+				strerror(errno));
 		return -1;
 	}
 
-	FILE *sf = fdopen(sfd, "a+")
+	FILE *sf = fdopen(sfd, "a+");
 	if (!sf) {
-		ROS_ERROR("fdopen: %s: %s", serial_port, strerror(errno));
+		ROS_ERROR("fdopen: %s: %s", serial_port.c_str(), strerror(errno));
 		return -1;
 	}
 
-	ros::Subscriber sub_mvel = n.subscribe("motor_vel", 1, direction_sub, sf);
+	n.subscribe("motor_vel", 1, boost::bind(direction_sub, _1, sf));
 
-	boost::thread recv_th(recv_thread, sf, odom_pub, a_current, b_current);
+	boost::thread recv_th(recv_thread, sf);
 
 	ros::spin();
 
