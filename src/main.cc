@@ -196,7 +196,7 @@ static void recv_thread(FILE *sf)
 }
 
 /* direction_sub - subscriber callback for a direction message */
-static void direction_sub(const hj_node::MotorsConstPtr &msg,
+static void direction_sub(const hj_node::Motors::ConstPtr &msg,
 		FILE *sf)
 {
 	struct hjb_pkt_set_speed ss;
@@ -239,7 +239,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	n.subscribe("motor_vel", 1, boost::bind(direction_sub, _1, sf));
+	n.subscribe<hj_node::Motors>("motor_vel", 1, boost::bind(direction_sub, _1, sf));
 
 	boost::thread recv_th(recv_thread, sf);
 
