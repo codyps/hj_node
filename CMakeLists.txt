@@ -21,6 +21,7 @@ rosbuild_genmsg()
 #uncomment if you have defined services
 #rosbuild_gensrv()
 
+
 #common commands for building c++ executables and libraries
 #rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
 #target_link_libraries(${PROJECT_NAME} another_library)
@@ -30,3 +31,4 @@ rosbuild_genmsg()
 #target_link_libraries(example ${PROJECT_NAME})
 
 rosbuild_add_executable(hj_link src/main.cc src/half_jackal/pc/frame_async.c)
+rosbuild_add_compile_flags(hj_link -Wno-missing-field-initializers)

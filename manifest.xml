@@ -14,9 +14,6 @@
 	<versioncontrol type="git"
 		url="https://github.com/jmesmon/hj_node" />
 
-	<export> 
-		<cpp cflags="-Wno-missing-field-initializers" />
-	</export> 
 </package>
 
 
