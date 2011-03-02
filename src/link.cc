@@ -136,7 +136,7 @@ static void direction_sub(const hj_node::Motors::ConstPtr &msg,
 
 int main(int argc, char **argv)
 {
-	ros::init(argc, argv, "half_jackal");
+	ros::init(argc, argv, "hj/link");
 
 	ros::NodeHandle n;
 	ros::NodeHandle n_priv("~");
@@ -166,7 +166,8 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	n.subscribe<hj_node::Motors>("motor_vel", 1, boost::bind(direction_sub, _1, sf));
+	n.subscribe<hj_node::Motors>("motor_vel", 1,
+			boost::bind(direction_sub, _1, sf));
 
 	boost::thread recv_th(recv_thread, sf);
 

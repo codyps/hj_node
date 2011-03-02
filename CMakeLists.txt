@@ -30,5 +30,8 @@ rosbuild_genmsg()
 #rosbuild_add_executable(example examples/example.cpp)
 #target_link_libraries(example ${PROJECT_NAME})
 
-rosbuild_add_executable(hj_link src/main.cc src/half_jackal/pc/frame_async.c)
-rosbuild_add_compile_flags(hj_link -Wno-missing-field-initializers)
+rosbuild_add_executable(link src/link.cc src/half_jackal/pc/frame_async.c)
+rosbuild_add_compile_flags(link -Wno-missing-field-initializers)
+
+rosbuild_add_executable(twist_to_motor src/twist_to_motor.cc)
+rosbuild_add_compile_flags(twist_to_motor -Wno-missing-field-initializers)
