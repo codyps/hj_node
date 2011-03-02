@@ -102,6 +102,7 @@ static void recv_thread(FILE *sf)
 			hj_to_info(&ipd.info[0], &inf->a);
 			hj_to_info(&ipd.info[1], &inf->b);
 
+			ipd.header.stamp = ros::Time::now();
 			ip.publish(ipd);
 
 			break;
