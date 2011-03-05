@@ -9,11 +9,11 @@
 
 #include "nodelet/nodelet.h"
 
-#include <term.h>
+#include <term_open.h>
 #include <frame_async.h>
 #include <hj_proto.h>
 
-using namespace hj;
+namespace hj {
 
 static void hj_to_info(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
 {
@@ -25,10 +25,10 @@ static void hj_to_info(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
 
 class link_nodelet: public nodelet::Nodelet {
 public:
-	LinkNodelet()
+	link_nodelet()
 	{}
 
-	~LinkNodelet()
+	~link_nodelet()
 	{}
 
 private:
@@ -36,7 +36,7 @@ private:
 
 	void direction_sub(const hj_node::Motors::ConstPtr &msg,
 		FILE *sf);
-	void recv_thread(FILE *sf, ros::NodeHandle &n);
+	void recv_thread(FILE *sf);
 
 	boost::mutex old_speed_mutex;
 	struct hjb_pkt_set_speed old_speed;
@@ -50,22 +50,20 @@ void link_nodelet::onInit(void)
 	std::string serial_port;
 	if (!n_priv.getParam("serial_port", serial_port)) {
 		NODELET_ERROR("no serial port specified for param \"serial_port\"");
-		return -1;
+		return;
 	}
 
 	FILE *sf = term_open(serial_port.c_str());
 	if (!sf) {
 		NODELET_ERROR("term_open: %s: %s",
 				serial_port.c_str(), strerror(errno));
-		return -1;
+		return;
 	}
 
 	n.subscribe<hj_node::Motors>("motor_vel", 1,
-			boost::bind(direction_sub, _1, sf));
+			boost::bind(&hj::link_nodelet::direction_sub, _1, sf));
 
-	boost::thread recv_th(recv_thread, sf, n);
-
-	ros::spin();
+	boost::thread recv_th(&hj::link_nodelet::recv_thread, sf);
 }
 
 /* direction_sub - subscriber callback for a direction message */
@@ -85,8 +83,9 @@ void link_nodelet::direction_sub(const hj_node::Motors::ConstPtr &msg,
 	}
 }
 
-void link_nodelet::recv_thread(FILE *sf, ros::NodeHandle &n)
+void link_nodelet::recv_thread(FILE *sf)
 {
+	ros::NodeHandle n = getNodeHandle();
 	ros::Publisher ip = n.advertise<hj_node::InfoPair>("info", 1);
 	ros::Time current_time;
 
@@ -135,7 +134,7 @@ void link_nodelet::recv_thread(FILE *sf, ros::NodeHandle &n)
 			hj_to_info(&ipd->info[0], &inf->a);
 			hj_to_info(&ipd->info[1], &inf->b);
 
-			ipd.header.stamp = ros::Time::now();
+			ipd->header.stamp = ros::Time::now();
 			ip.publish(ipd);
 
 			break;
@@ -149,3 +148,4 @@ void link_nodelet::recv_thread(FILE *sf, ros::NodeHandle &n)
 	}
 }
 
+} /* namespace hj */
