@@ -9,7 +9,7 @@
 	<url>https://github.com/jmesmon/hj_node</url>
 
 	<depend package="roscpp"/>
-  <depend package="std_msgs"/>
+	<depend package="nodelet"/>
 
 	<versioncontrol type="git"
 		url="https://github.com/jmesmon/hj_node"/>
