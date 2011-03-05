@@ -61,8 +61,7 @@ void link_nodelet::onInit(void)
 	}
 
 	n.subscribe<hj_node::Motors>("motor_vel", 1,
-			boost::function<void (const hj_node::Motors::ConstPtr)>
-			(boost::bind(&hj::link_nodelet::direction_sub, this, _1, sf)));
+			boost::bind(&hj::link_nodelet::direction_sub, this, _1, sf));
 
 	boost::thread recv_th(&hj::link_nodelet::recv_thread, this, sf);
 }
