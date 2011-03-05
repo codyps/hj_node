@@ -4,40 +4,16 @@
 
 #include <boost/thread.hpp>
 
-#include <frame_async.h>
-#include <hj_proto.h>
-
 #include <hj_node/InfoPair.h>
 #include <hj_node/Motors.h>
 
-#include <termios.h>
-#include <unistd.h>
+#include "nodelet/nodelet.h"
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
+#include <term.h>
+#include <frame_async.h>
+#include <hj_proto.h>
 
-static int serial_conf(int fd, speed_t speed)
-{
-	struct termios t;
-	int ret = tcgetattr(fd, &t);
-
-	if (ret < 0)
-		return ret;
-
-	ret = cfsetispeed(&t, speed);
-	if (ret < 0)
-		return ret;
-
-	ret = cfsetospeed(&t, speed);
-	if (ret < 0)
-		return ret;
-
-
-	t.c_cflag |= PARENB | PARODD;
-
-	return tcsetattr(fd, TCSANOW, &t);
-}
+using namespace hj;
 
 static void hj_to_info(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
 {
@@ -47,14 +23,71 @@ static void hj_to_info(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
 	i->vel = h->vel;
 }
 
-static boost::mutex old_speed_mutex;
-static struct hjb_pkt_set_speed old_speed;
+class link_nodelet: public nodelet::Nodelet {
+public:
+	LinkNodelet()
+	{}
 
-static void recv_thread(FILE *sf)
+	~LinkNodelet()
+	{}
+
+private:
+	virtual void onInit(void);
+
+	void direction_sub(const hj_node::Motors::ConstPtr &msg,
+		FILE *sf);
+	void recv_thread(FILE *sf, ros::NodeHandle &n);
+
+	boost::mutex old_speed_mutex;
+	struct hjb_pkt_set_speed old_speed;
+};
+
+void link_nodelet::onInit(void)
 {
-	ros::NodeHandle n;
-	ros::Publisher ip = n.advertise<hj_node::InfoPair>("info", 1);
+	ros::NodeHandle n = getNodeHandle();
+	ros::NodeHandle n_priv = getPrivateNodeHandle();
 
+	std::string serial_port;
+	if (!n_priv.getParam("serial_port", serial_port)) {
+		NODELET_ERROR("no serial port specified for param \"serial_port\"");
+		return -1;
+	}
+
+	FILE *sf = term_open(serial_port.c_str());
+	if (!sf) {
+		NODELET_ERROR("term_open: %s: %s",
+				serial_port.c_str(), strerror(errno));
+		return -1;
+	}
+
+	n.subscribe<hj_node::Motors>("motor_vel", 1,
+			boost::bind(direction_sub, _1, sf));
+
+	boost::thread recv_th(recv_thread, sf, n);
+
+	ros::spin();
+}
+
+/* direction_sub - subscriber callback for a direction message */
+void link_nodelet::direction_sub(const hj_node::Motors::ConstPtr &msg,
+		FILE *sf)
+{
+	struct hjb_pkt_set_speed ss;
+	ss.head.type = HJB_PT_SET_SPEED;
+	ss.vel[0] = msg->vel[0];
+	ss.vel[0] = msg->vel[1];
+
+	frame_send(sf, &ss, HJB_PL_SET_SPEED);
+
+	{
+		boost::lock_guard<boost::mutex> l(old_speed_mutex);
+		old_speed = ss;
+	}
+}
+
+void link_nodelet::recv_thread(FILE *sf, ros::NodeHandle &n)
+{
+	ros::Publisher ip = n.advertise<hj_node::InfoPair>("info", 1);
 	ros::Time current_time;
 
 	uint8_t buf[1024];
@@ -62,7 +95,7 @@ static void recv_thread(FILE *sf)
 	while(n.ok()){
 		ssize_t len = frame_recv(sf, buf, sizeof(buf));
 		if (len < 0) {
-			ROS_WARN("frame_recv returned %zd", len);
+			NODELET_WARN("frame_recv returned %zd", len);
 			continue;
 		}
 
@@ -70,7 +103,7 @@ static void recv_thread(FILE *sf)
 		switch(h->type) {
 		case HJA_PT_TIMEOUT: {
 			if (len != HJA_PL_TIMEOUT) {
-				ROS_WARN("HJ_PT_TIMEOUT: len = %zu, expected %d",
+				NODELET_WARN("HJ_PT_TIMEOUT: len = %zu, expected %d",
 						len, HJA_PL_TIMEOUT);
 				continue;
 			}
@@ -91,16 +124,16 @@ static void recv_thread(FILE *sf)
 		}
 		case HJA_PT_INFO: {
 			if (len != HJA_PL_INFO) {
-				ROS_WARN("HJ_PT_INFO: len = %zu, expected %d",
+				NODELET_WARN("HJ_PT_INFO: len = %zu, expected %d",
 						len, HJA_PL_INFO);
 				continue;
 			}
 			struct hja_pkt_info *inf = (typeof(inf)) buf;
 
 			/* publish it */
-			hj_node::InfoPair ipd;
-			hj_to_info(&ipd.info[0], &inf->a);
-			hj_to_info(&ipd.info[1], &inf->b);
+			hj_node::InfoPairPtr ipd(new hj_node::InfoPair);
+			hj_to_info(&ipd->info[0], &inf->a);
+			hj_to_info(&ipd->info[1], &inf->b);
 
 			ipd.header.stamp = ros::Time::now();
 			ip.publish(ipd);
@@ -108,7 +141,7 @@ static void recv_thread(FILE *sf)
 			break;
 		}
 		default: {
-			ROS_WARN("recieved unknown pt %x, len %zu",
+			NODELET_WARN("recieved unknown pt %x, len %zu",
 					h->type, len);
 			break;
 		}
@@ -116,62 +149,3 @@ static void recv_thread(FILE *sf)
 	}
 }
 
-
-/* direction_sub - subscriber callback for a direction message */
-static void direction_sub(const hj_node::Motors::ConstPtr &msg,
-		FILE *sf)
-{
-	struct hjb_pkt_set_speed ss;
-	ss.head.type = HJB_PT_SET_SPEED;
-	ss.vel[0] = msg->vel[0];
-	ss.vel[0] = msg->vel[1];
-
-	frame_send(sf, &ss, HJB_PL_SET_SPEED);
-
-	{
-		boost::lock_guard<boost::mutex> l(old_speed_mutex);
-		old_speed = ss;
-	}
-}
-
-int main(int argc, char **argv)
-{
-	ros::init(argc, argv, "hj/link");
-
-	ros::NodeHandle n;
-	ros::NodeHandle n_priv("~");
-
-	std::string serial_port;
-	if (!n_priv.getParam("serial_port", serial_port)) {
-		ROS_ERROR("no serial port specified for param \"serial_port\"");
-		return -1;
-	}
-
-	int sfd = open(serial_port.c_str(), O_RDWR);
-	if (sfd < 0) {
-		ROS_ERROR("open: %s: %s", serial_port.c_str(), strerror(errno));
-		return -1;
-	}
-
-	int ret = serial_conf(sfd, B57600);
-	if (ret < 0) {
-		ROS_ERROR("serial_conf: %s: %s", serial_port.c_str(),
-				strerror(errno));
-		return -1;
-	}
-
-	FILE *sf = fdopen(sfd, "a+");
-	if (!sf) {
-		ROS_ERROR("fdopen: %s: %s", serial_port.c_str(), strerror(errno));
-		return -1;
-	}
-
-	n.subscribe<hj_node::Motors>("motor_vel", 1,
-			boost::bind(direction_sub, _1, sf));
-
-	boost::thread recv_th(recv_thread, sf);
-
-	ros::spin();
-
-	return 0;
-}
