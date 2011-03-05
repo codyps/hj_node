@@ -12,7 +12,12 @@
   <depend package="std_msgs"/>
 
 	<versioncontrol type="git"
-		url="https://github.com/jmesmon/hj_node" />
+		url="https://github.com/jmesmon/hj_node"/>
+
+	<export>
+		<nodelet plugin="${prefix}/nodelet.xml"/>
+	</export>
+
 
 </package>
 
