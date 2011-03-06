@@ -7,13 +7,14 @@
 #include <hj_node/InfoPair.h>
 #include <hj_node/Motors.h>
 
-#include "nodelet/nodelet.h"
+#include <nodelet/nodelet.h>
+#include <pluginlib/class_list_macros.h>
 
 #include <term_open.h>
 #include <frame_async.h>
 #include <hj_proto.h>
 
-namespace hj {
+namespace hj_node {
 
 static void hj_to_info(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
 {
@@ -149,3 +150,5 @@ void link_nodelet::recv_thread(FILE *sf)
 }
 
 } /* namespace hj */
+
+PLUGINLIB_DECLARE_CLASS(hj_node, link, hj_node::link_nodelet, nodelet::Nodelet);
