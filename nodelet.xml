@@ -1,12 +1,11 @@
 <!-- ex: set sw=2 ts=2: -->
-<library path="">
+<library path="lib/liblink">
 	<class name="hj_node/link"
-		type="link"
+		type="hj_node::link"
 		base_class_type="nodelet::Nodelet">
 		<description>
 			Publish raw data from a half jackal.
 		</description>
-
 	</class>
 </library>
 
