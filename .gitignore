@@ -1,3 +1,9 @@
+bin/
+build/
+msg_gen/
+msg/lisp/
+src/hj_node/
+
 *.eep
 *.elf
 *.hex
