@@ -151,4 +151,4 @@ void link_nodelet::recv_thread(FILE *sf)
 
 } /* namespace hj */
 
-PLUGINLIB_DECLARE_CLASS(hj_node, link, hj_node::link_nodelet, nodelet::Nodelet);
+PLUGINLIB_DECLARE_CLASS(hj_node, link, hj_node::link_nodelet, nodelet::Nodelet)

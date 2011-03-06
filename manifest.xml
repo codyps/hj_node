@@ -17,8 +17,6 @@
 	<export>
 		<nodelet plugin="${prefix}/nodelet.xml"/>
 	</export>
-
-
 </package>
 
 
