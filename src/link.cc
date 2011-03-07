@@ -10,18 +10,26 @@
 #include <nodelet/nodelet.h>
 #include <pluginlib/class_list_macros.h>
 
+#include <arpa/inet.h>
+
 #include <term_open.h>
 #include <frame_async.h>
 #include <hj_proto.h>
 
 namespace hj_node {
 
-static void hj_to_info(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
+static void hj_enc_unpack(hj_node::Encoder *ep, struct hj_pktc_enc *er)
 {
-	i->current = h->current;
-	i->enc_ct = h->enc_ct;
-	i->pwr = h->pwr;
-	i->vel = h->vel;
+	ep->pos = ntohl(er->p);
+	ep->neg = ntohl(er->n);
+}
+
+static void hj_info_unpack(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
+{
+	i->current = ntohs(h->current);
+	i->pwr = ntohs(h->pwr);
+	i->vel = ntohs(h->vel);
+	hj_enc_unpack(&i->enc, &h->e);
 }
 
 class link_nodelet: public nodelet::Nodelet {
@@ -73,8 +81,8 @@ void link_nodelet::direction_sub(const hj_node::Motors::ConstPtr &msg,
 {
 	struct hjb_pkt_set_speed ss;
 	ss.head.type = HJB_PT_SET_SPEED;
-	ss.vel[0] = msg->vel[0];
-	ss.vel[0] = msg->vel[1];
+	ss.vel[0] = htons(msg->vel[0]);
+	ss.vel[1] = htons(msg->vel[1]);
 
 	frame_send(sf, &ss, HJB_PL_SET_SPEED);
 
@@ -132,8 +140,8 @@ void link_nodelet::recv_thread(FILE *sf)
 
 			/* publish it */
 			hj_node::InfoPairPtr ipd(new hj_node::InfoPair);
-			hj_to_info(&ipd->info[0], &inf->a);
-			hj_to_info(&ipd->info[1], &inf->b);
+			hj_info_unpack(&ipd->info[0], &inf->m[0]);
+			hj_info_unpack(&ipd->info[1], &inf->m[1]);
 
 			ipd->header.stamp = ros::Time::now();
 			ip.publish(ipd);
