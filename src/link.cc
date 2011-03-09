@@ -35,42 +35,55 @@ static void hj_info_unpack(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
 class link_nodelet: public nodelet::Nodelet {
 public:
 	link_nodelet()
-	{}
+	{
+		old_speed.head.type = HJB_PT_SET_SPEED;
+		old_speed.vel[0] = 0;
+		old_speed.vel[1] = 0;
+	}
 
 	~link_nodelet()
 	{}
 
-private:
 	virtual void onInit(void);
 
+private:
 	void direction_sub(const hj_node::Motors::ConstPtr &msg,
 		FILE *sf);
 	void recv_thread(FILE *sf);
 
+	/* Actually Shared */
 	boost::mutex old_speed_mutex;
+	boost::mutex serial_mutex;
 	struct hjb_pkt_set_speed old_speed;
+
+	/* Not really shared */
+	std::string serial_port;
+	FILE *sf;
+
+	ros::Publisher pub;
+	ros::Subscriber sub;
 };
 
 void link_nodelet::onInit(void)
 {
-	ros::NodeHandle n = getNodeHandle();
-	ros::NodeHandle n_priv = getPrivateNodeHandle();
+	ros::NodeHandle &n = getNodeHandle();
+	ros::NodeHandle &n_priv = getPrivateNodeHandle();
 
-	std::string serial_port;
 	if (!n_priv.getParam("serial_port", serial_port)) {
 		NODELET_ERROR("no serial port specified for param \"serial_port\"");
 		return;
 	}
 
-	FILE *sf = term_open(serial_port.c_str());
+	sf = term_open(serial_port.c_str());
 	if (!sf) {
 		NODELET_ERROR("term_open: %s: %s",
 				serial_port.c_str(), strerror(errno));
 		return;
 	}
 
-	n.subscribe<hj_node::Motors>("motor_vel", 1,
+	sub = n.subscribe<hj_node::Motors>("motor_vel", 1,
 			boost::bind(&hj_node::link_nodelet::direction_sub, this, _1, sf));
+	pub = n.advertise<hj_node::InfoPair>("info", 1);
 
 	boost::thread recv_th(&hj_node::link_nodelet::recv_thread, this, sf);
 }
@@ -84,7 +97,10 @@ void link_nodelet::direction_sub(const hj_node::Motors::ConstPtr &msg,
 	ss.vel[0] = htons(msg->vel[0]);
 	ss.vel[1] = htons(msg->vel[1]);
 
-	frame_send(sf, &ss, HJB_PL_SET_SPEED);
+	{
+		boost::lock_guard<boost::mutex> l(serial_mutex);
+		frame_send(sf, &ss, HJB_PL_SET_SPEED);
+	}
 
 	{
 		boost::lock_guard<boost::mutex> l(old_speed_mutex);
@@ -95,13 +111,17 @@ void link_nodelet::direction_sub(const hj_node::Motors::ConstPtr &msg,
 void link_nodelet::recv_thread(FILE *sf)
 {
 	ros::NodeHandle n = getNodeHandle();
-	ros::Publisher ip = n.advertise<hj_node::InfoPair>("info", 1);
 	ros::Time current_time;
 
 	uint8_t buf[1024];
 	struct hj_pktc_header *h = (typeof(h))buf;
 	while(n.ok()){
-		ssize_t len = frame_recv(sf, buf, sizeof(buf));
+		ssize_t len;
+		{
+			boost::lock_guard<boost::mutex> l(serial_mutex);
+			len = frame_recv(sf, buf, sizeof(buf));
+		}
+
 		if (len < 0) {
 			NODELET_WARN("frame_recv returned %zd", len);
 			continue;
@@ -121,12 +141,19 @@ void link_nodelet::recv_thread(FILE *sf)
 				boost::lock_guard<boost::mutex> l(old_speed_mutex);
 				ss = old_speed;
 			}
-			frame_send(sf, &ss, HJB_PL_SET_SPEED);
+
+			{
+				boost::lock_guard<boost::mutex> l(serial_mutex);
+				frame_send(sf, &ss, HJB_PL_SET_SPEED);
+			}
 
 			/* XXX: hack: also request info */
 			struct hjb_pkt_req_info ri;
 			ri.head.type = HJB_PT_REQ_INFO;
-			frame_send(sf, &ri, HJB_PL_REQ_INFO);
+			{
+				boost::lock_guard<boost::mutex> l(serial_mutex);
+				frame_send(sf, &ri, HJB_PL_REQ_INFO);
+			}
 
 			break;
 		}
@@ -144,7 +171,25 @@ void link_nodelet::recv_thread(FILE *sf)
 			hj_info_unpack(&ipd->info[1], &inf->m[1]);
 
 			ipd->header.stamp = ros::Time::now();
-			ip.publish(ipd);
+			this->pub.publish(ipd);
+
+			break;
+		}
+		case HJA_PT_ERROR: {
+			if (len != HJA_PL_ERROR) {
+				NODELET_WARN("HJ_PT_ERROR: len = %zu, expected %d",
+						len, HJA_PL_ERROR);
+				continue;
+			}
+
+			struct hja_pkt_error *er = (typeof(er)) buf;
+
+			char file[sizeof(er->file) + 1];
+			strncpy(file, er->file, sizeof(er->file));
+			file[sizeof(er->file)] = 0;
+			NODELET_WARN("HJ_PT_ERROR: %s:%d: errnum: %d", file,
+					ntohs(er->line),
+					er->errnum);
 
 			break;
 		}

@@ -1,9 +1,9 @@
 <!-- ex: set sw=2 ts=2 ft=xml: -->
 <launch>
-	<node pkg="nodelet" type="nodelet" name="standalone_nodelet"
-		args="manager" output="screen"/>
-
 	<group ns="hj">
+		<node pkg="nodelet" type="nodelet" name="standalone_nodelet"
+			args="manager" output="screen"/>
+
 		<node pkg="nodelet" type="nodelet" name="link"
 			args="load hj_node/link standalone_nodelet" output="screen">
 				<param name="serial_port" value="/dev/ttyUSB0"/>
