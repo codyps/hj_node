@@ -24,24 +24,17 @@ front wheels and a second controls the 2 rear wheels.
 ### Recomendation ###
 
 If cloning initially, do:
-    git clone --recursive <repo>
-If that fails to reach you in time, do:
     git clone <repo>
-    git submodule init
-    git submodule foreach --recursive git submodule init
+    git submodule update --init --recursive
 
 When pulling at a top level, do:
-    git pull --recurse-submodules
-    git submodule update
-    git submodule foreach --recursive git submodule update
+    git pull
+    git submodule update --init --recursive
 
 If one of you poor blokes happens to be in as bad a state as myself and wishes
 to quickly update their chain of submodules, do:
     git pull --recurse-submodules
-    git submodule foreach --recursive git submodule init '&&' git submodule \
-        update '&&' git checkout master '&&' git pull
-
-Of note:
-	adding the flag '--recurse-submodules' doesn`t really recurse.
+    git submodule update --init --recursive
+    git submodule foreach --recursive git checkout master '&&' git pull
 
 
