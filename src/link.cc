@@ -33,13 +33,23 @@ static void hj_info_unpack(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
 	hj_enc_unpack(&i->enc, &h->e);
 }
 
+#if 0
+static void hj_pid_pack(struct hj_pktc_pid_k *k, hj_node::PidK *p)
+{
+	k->p = htonl(p->p);
+	k->i = htonl(p->i);
+	k->d = htonl(p->d);
+	k->i_max = htons(p->i_max);
+}
+#endif
+
 class link_nodelet: public nodelet::Nodelet {
 public:
 	link_nodelet()
 	{
-		old_speed.head.type = HJB_PT_SET_SPEED;
-		old_speed.vel[0] = 0;
-		old_speed.vel[1] = 0;
+		cur_speed.head.type = HJB_PT_SET_SPEED;
+		cur_speed.vel[0] = 0;
+		cur_speed.vel[1] = 0;
 	}
 
 	~link_nodelet()
@@ -52,14 +62,20 @@ private:
 		FILE *sf);
 	void recv_thread(FILE *sf);
 
-	/* Actually Shared */
-	boost::mutex old_speed_mutex;
-	boost::mutex serial_mutex;
-	struct hjb_pkt_set_speed old_speed;
+	int frame_send(void *data, size_t len);
+	ssize_t frame_recv(void *data, size_t len);
 
-	/* Not really shared */
-	std::string serial_port;
+	struct hjb_pkt_set_speed get_cur_speed(void);
+	void set_cur_speed(struct hjb_pkt_set_speed *ss);
+
+	/* Actually Shared */
+	boost::mutex cur_speed_mutex;
+	boost::mutex serial_mutex;
+	struct hjb_pkt_set_speed cur_speed;
+	struct hj_pkt_pid_k      cur_pid;
+
 	FILE *sf;
+	std::string serial_port;
 
 	ros::Publisher pub;
 	ros::Subscriber sub;
@@ -75,10 +91,10 @@ void link_nodelet::onInit(void)
 		return;
 	}
 
-	sf = term_open(serial_port.c_str());
-	if (!sf) {
+	this->sf = term_open(this->serial_port.c_str());
+	if (!this->sf) {
 		NODELET_ERROR("term_open: %s: %s",
-				serial_port.c_str(), strerror(errno));
+				this->serial_port.c_str(), strerror(errno));
 		return;
 	}
 
@@ -98,15 +114,52 @@ void link_nodelet::direction_sub(const hj_node::Motors::ConstPtr &msg,
 	ss.vel[0] = htons(msg->vel[0]);
 	ss.vel[1] = htons(msg->vel[1]);
 
-	{
-		boost::lock_guard<boost::mutex> l(serial_mutex);
-		frame_send(sf, &ss, HJB_PL_SET_SPEED);
-	}
+	this->frame_send(&ss, HJB_PL_SET_SPEED);
+	this->set_cur_speed(&ss);
+}
 
-	{
-		boost::lock_guard<boost::mutex> l(old_speed_mutex);
-		old_speed = ss;
-	}
+int link_nodelet::frame_send(void *data, size_t data_len)
+{
+	boost::lock_guard<boost::mutex> l(this->serial_mutex);
+	return ::frame_send(this->sf, data, data_len);
+}
+
+ssize_t link_nodelet::frame_recv(void *data, size_t data_len)
+{
+	boost::lock_guard<boost::mutex> l(this->serial_mutex);
+	return ::frame_recv(this->sf, data, data_len);
+}
+
+#if 0
+void link_nodelet::pid_sub(const hj_node::PidKPair::ConstPtr &msg,
+		FILE *sf)
+{
+	struct hj_pkt_pid_k pk;
+	pk.head.type = HJ_PT_PID_K;
+	hj_pid_pack(msg->k[0], &pk.k[0]);
+	hj_pid_pack(msg->k[1], &pk.k[1]);
+}
+#endif
+
+#define HJ_CASE(to_from, pkt_type)						\
+	case HJ##to_from##_PT_##pkt_type:					\
+		if (len != HJ##to_from##_PL_##pkt_type) {			\
+			NODELET_WARN("HJ" #to_from "_PT_" #pkt_type		\
+					": len = %zu, expected = %d",		\
+					len, HJ##to_from##_PL_##pkt_type);	\
+			continue;						\
+		}
+
+void link_nodelet::set_cur_speed(struct hjb_pkt_set_speed *ss)
+{
+	boost::lock_guard<boost::mutex> l(this->cur_speed_mutex);
+	this->cur_speed = *ss;
+}
+
+struct hjb_pkt_set_speed link_nodelet::get_cur_speed(void)
+{
+	boost::lock_guard<boost::mutex> l(this->cur_speed_mutex);
+	return this->cur_speed;
 }
 
 void link_nodelet::recv_thread(FILE *sf)
@@ -117,11 +170,7 @@ void link_nodelet::recv_thread(FILE *sf)
 	uint8_t buf[1024];
 	struct hj_pkt_header *h = (typeof(h))buf;
 	while(n.ok()){
-		ssize_t len;
-		{
-			boost::lock_guard<boost::mutex> l(serial_mutex);
-			len = frame_recv(sf, buf, sizeof(buf));
-		}
+		ssize_t len = this->frame_recv(buf, sizeof(buf));
 
 		if (len < 0) {
 			NODELET_WARN("frame_recv returned %zd", len);
@@ -130,40 +179,20 @@ void link_nodelet::recv_thread(FILE *sf)
 
 		current_time = ros::Time::now();
 		switch(h->type) {
-		case HJA_PT_TIMEOUT: {
-			if (len != HJA_PL_TIMEOUT) {
-				NODELET_WARN("HJ_PT_TIMEOUT: len = %zu, expected %d",
-						len, HJA_PL_TIMEOUT);
-				continue;
-			}
+		HJ_CASE(A, TIMEOUT) {
 			/* resend motor values so the chip doesn't shut down */
-			struct hjb_pkt_set_speed ss;
-			{
-				boost::lock_guard<boost::mutex> l(old_speed_mutex);
-				ss = old_speed;
-			}
-
-			{
-				boost::lock_guard<boost::mutex> l(serial_mutex);
-				frame_send(sf, &ss, HJB_PL_SET_SPEED);
-			}
+			struct hjb_pkt_set_speed ss = this->get_cur_speed();
+			this->frame_send(&ss, HJB_PL_SET_SPEED);
 
 			/* XXX: hack: also request info */
 			struct hj_pkt_header ri;
 			ri.type = HJB_PT_REQ_INFO;
-			{
-				boost::lock_guard<boost::mutex> l(serial_mutex);
-				frame_send(sf, &ri, HJB_PL_REQ_INFO);
-			}
+			this->frame_send(&ri, HJB_PL_REQ_INFO);
 
 			break;
 		}
-		case HJA_PT_INFO: {
-			if (len != HJA_PL_INFO) {
-				NODELET_WARN("HJ_PT_INFO: len = %zu, expected %d",
-						len, HJA_PL_INFO);
-				continue;
-			}
+
+		HJ_CASE(A, INFO) {
 			struct hja_pkt_info *inf = (typeof(inf)) buf;
 
 			/* publish it */
@@ -176,13 +205,8 @@ void link_nodelet::recv_thread(FILE *sf)
 
 			break;
 		}
-		case HJA_PT_ERROR: {
-			if (len != HJA_PL_ERROR) {
-				NODELET_WARN("HJ_PT_ERROR: len = %zu, expected %d",
-						len, HJA_PL_ERROR);
-				continue;
-			}
 
+		HJ_CASE(A, ERROR) {
 			struct hja_pkt_error *er = (typeof(er)) buf;
 
 			char file[sizeof(er->file) + 1];
