@@ -114,7 +114,7 @@ void link_nodelet::recv_thread(FILE *sf)
 	ros::Time current_time;
 
 	uint8_t buf[1024];
-	struct hj_pktc_header *h = (typeof(h))buf;
+	struct hj_pkt_header *h = (typeof(h))buf;
 	while(n.ok()){
 		ssize_t len;
 		{
@@ -148,8 +148,8 @@ void link_nodelet::recv_thread(FILE *sf)
 			}
 
 			/* XXX: hack: also request info */
-			struct hjb_pkt_req_info ri;
-			ri.head.type = HJB_PT_REQ_INFO;
+			struct hj_pkt_header ri;
+			ri.type = HJB_PT_REQ_INFO;
 			{
 				boost::lock_guard<boost::mutex> l(serial_mutex);
 				frame_send(sf, &ri, HJB_PL_REQ_INFO);
