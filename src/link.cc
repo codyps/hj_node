@@ -6,6 +6,7 @@
 
 #include <hj_node/InfoPair.h>
 #include <hj_node/Motors.h>
+#include <hj_node/PidKPair.h>
 
 #include <nodelet/nodelet.h>
 #include <pluginlib/class_list_macros.h>
