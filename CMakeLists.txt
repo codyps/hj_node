@@ -36,5 +36,5 @@ rosbuild_add_library(link src/link.cc src/half_jackal/pc/frame_async.c
 # Otherwise we get warnings in boost::time headers.
 rosbuild_add_compile_flags(link -Wno-missing-field-initializers)
 
-rosbuild_add_executable(twist_to_motor src/twist_to_motor.cc)
-rosbuild_add_compile_flags(twist_to_motor -Wno-missing-field-initializers)
+rosbuild_add_executable(encoder_to_odom src/encoder_to_odom.cc)
+rosbuild_add_compile_flags(encoder_to_odom -Wno-missing-field-initializers)
