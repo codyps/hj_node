@@ -1,3 +1,7 @@
+/* Using the encoder data from the motor controller, populate an odometry
+ * packet.
+ */
+
 #include <ros/ros.h>
 
 #include <nav_msgs/Odometry.h>
