@@ -2,6 +2,18 @@
 
 #include <types.h>
 
+template <typename T>
+class type_to_xmlrpc_type {};
+
+template <>
+class type_to_xmlrpc_type <double> {
+public:
+	operator XmlRpc::XmlRpcValue::Type()
+	{
+		return XmlRpc::XmlRpcValue::TypeDouble;
+	}
+};
+
 template <typename T, size_t N>
 bool getParam_array(ros::NodeHandle &n, std::string const &name, T (&arr)[N])
 {
@@ -12,10 +24,12 @@ bool getParam_array(ros::NodeHandle &n, std::string const &name, T (&arr)[N])
 	ROS_ASSERT(xr.getType() == XmlRpc::XmlRpcValue::TypeArray);
 	ROS_ASSERT(N == xr.size());
 
-	for (size_t i = 0; i < xr.size(); i++) {
-		ROS_ASSERT(xr[i].getType() == XmlRpc::XmlRpcValue::TypeDouble);
+	for (size_t i = 0; i < (size_t)xr.size(); i++) {
+		ROS_ASSERT(xr[i].getType() == type_to_xmlrpc_type<T>());
 		arr[i] = static_cast<T>(xr[i]);
 	}
+
+	return true;
 }
 
 int main(int argc, char **argv)
@@ -25,18 +39,9 @@ int main(int argc, char **argv)
 	ros::NodeHandle n;
 	ros::NodeHandle n_priv("~");
 
-	XmlRpc::XmlRpcValue cov_r;
 	Covariance cov;
 
-	n_priv.getParam("covariance", cov_r);
-
-	ROS_ASSERT(cov_r.getType() == XmlRpc::XmlRpcValue::TypeArray);
-	ROS_ASSERT(ARRAY_SIZE(cov) == (size_t)cov_r.size());
-
-	for (size_t i = 0; i < (size_t)cov_r.size(); i++) {
-		ROS_ASSERT(cov_r[i].getType() == XmlRpc::XmlRpcValue::TypeDouble);
-		cov[i] = static_cast<double>(cov_r[i]);
-	}
+	getParam_array(n_priv, "covariance", cov);
 
 	ROS_DEBUG("got cov.");
 
