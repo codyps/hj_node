@@ -99,7 +99,7 @@ void link_nodelet::onInit(void)
 	}
 
 	sub = n.subscribe<hj_node::Motors>("motor_vel", 1,
-			boost::bind(&hj_node::link_nodelet::direction_sub, this, _1, sf));
+		boost::bind(&hj_node::link_nodelet::direction_sub, this, _1, sf));
 	pub = n.advertise<hj_node::InfoPair>("info", 1);
 
 	boost::thread recv_th(&hj_node::link_nodelet::recv_thread, this, sf);
@@ -114,6 +114,7 @@ void link_nodelet::direction_sub(const hj_node::Motors::ConstPtr &msg,
 	ss.vel[0] = htons(msg->vel[0]);
 	ss.vel[1] = htons(msg->vel[1]);
 
+	NODELET_WARN("setting motors to %d and %d", msg->vel[0], msg->vel[1]);
 	this->frame_send(&ss, HJB_PL_SET_SPEED);
 	this->set_cur_speed(&ss);
 }
@@ -188,7 +189,6 @@ void link_nodelet::recv_thread(FILE *sf)
 			struct hj_pkt_header ri;
 			ri.type = HJB_PT_REQ_INFO;
 			this->frame_send(&ri, HJB_PL_REQ_INFO);
-
 			break;
 		}
 
@@ -214,7 +214,7 @@ void link_nodelet::recv_thread(FILE *sf)
 			file[sizeof(er->file)] = 0;
 			NODELET_WARN("HJ_PT_ERROR: %s:%d: errnum: %d", file,
 					ntohs(er->line),
-					er->errnum);
+					ntohl(er->errnum));
 
 			break;
 		}
