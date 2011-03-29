@@ -1,5 +1,5 @@
 <!-- ex: set sw=2 ts=2: -->
-<library path="lib/liblink">
+<library path="lib/libhj_link">
 	<class name="hj_node/link"
 		type="hj_node::link_nodelet"
 		base_class_type="nodelet::Nodelet">
@@ -7,5 +7,14 @@
 			Publish raw data from a half jackal.
 		</description>
 	</class>
+	<!--
+	<class name="hj_node/encoder_to_odom"
+		type="hj_node::encoder_to_odom"
+		base_class_type="nodelet::Nodelet">
+		<description>
+			Publish raw data from a half jackal.
+		</description>
+	</class>
+	-->
 </library>
 

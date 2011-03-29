@@ -13,9 +13,9 @@
 
 #include <arpa/inet.h>
 
-#include <term_open.h>
-#include <frame_async.h>
-#include <hj_proto.h>
+#include <hj_node/term_open.h>
+#include <hj_node/frame_async.h>
+#include <hj_node/hj_proto.h>
 
 namespace hj_node {
 

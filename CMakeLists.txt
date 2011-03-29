@@ -25,16 +25,19 @@ rosbuild_genmsg()
 #common commands for building c++ executables and libraries
 #rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
 #target_link_libraries(${PROJECT_NAME} another_library)
-#rosbuild_add_boost_directories()
 #rosbuild_link_boost(${PROJECT_NAME} thread)
 #rosbuild_add_executable(example examples/example.cpp)
 #target_link_libraries(example ${PROJECT_NAME})
 
-rosbuild_add_library(link src/link.cc src/half_jackal/pc/frame_async.c
-	src/half_jackal/pc/term.c)
+rosbuild_add_boost_directories()
+
+rosbuild_add_library(${PROJECT_NAME}
+	src/link.cc
+	src/encoder_to_odom.cc
+
+	src/half_jackal/pc/frame_async.c
+	src/half_jackal/pc/term.c
+)
 
 # Otherwise we get warnings in boost::time headers.
-rosbuild_add_compile_flags(link -Wno-missing-field-initializers)
-
-rosbuild_add_executable(encoder_to_odom src/encoder_to_odom.cc)
-rosbuild_add_compile_flags(encoder_to_odom -Wno-missing-field-initializers)
+rosbuild_add_compile_flags(${PROJECT_NAME} -Wno-missing-field-initializers)
