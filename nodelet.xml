@@ -7,7 +7,6 @@
 			Publish raw data from a half jackal.
 		</description>
 	</class>
-	<!--
 	<class name="hj_node/encoder_to_odom"
 		type="hj_node::encoder_to_odom"
 		base_class_type="nodelet::Nodelet">
@@ -15,6 +14,5 @@
 			Publish raw data from a half jackal.
 		</description>
 	</class>
-	-->
 </library>
 

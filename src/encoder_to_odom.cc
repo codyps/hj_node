@@ -4,12 +4,14 @@
 
 #include <ros/ros.h>
 
-#include <tf/tf.h>
+#include <tf/transform_broadcaster.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Quaternion.h>
 
 #include <hj_node/types.h>
 #include <hj_node/param_array.h>
+
+#include <hj_node/EncoderPair.h>
 
 #include <nodelet/nodelet.h>
 #include <pluginlib/class_list_macros.h>
@@ -98,7 +100,7 @@ public:
 		return op;
 	}
 
-	geometry_msgs::TransformStamped to_odom_trans(Covariance &pos_cov,
+	geometry_msgs::TransformStamped::Ptr to_odom_trans(Covariance &pos_cov,
 			Covariance &twist_cov)
 	{
 		geometry_msgs::TransformStamped::Ptr ts(
@@ -127,6 +129,8 @@ class encoder_to_odom : public nodelet::Nodelet {
 
 public:
 	ros::NodeHandle n;
+	ros::NodeHandle n_priv;
+
 	ros::Publisher odom_pub;
 	ros::Subscriber enc_sub;
 
@@ -155,13 +159,13 @@ public:
 			enc_to_dist(ep->encoders[0]),
 			enc_to_dist(ep->encoders[1])
 		};
-		this->dd_odom.update(this->drive_width, dist[0], dist[1]);
+		this->dd_odom.update(this->drive_width, dist[0], dist[1], ep->header.stamp);
 
 
 		/* TODO: publish odom and odom transform */
 	}
 
-	void link_nodelet::onInit(void)
+	void onInit(void)
 	{
 		this->n      = getNodeHandle();
 		this->n_priv = getPrivateNodeHandle();
@@ -198,7 +202,7 @@ public:
 		this->odom_pub =
 			n.advertise<nav_msgs::Odometry>("odom", 1);
 		this->enc_sub  =
-			n.subscribe("encoders", 1, enc_callback, this);
+			n.subscribe("encoders", 1, &::hj_node::encoder_to_odom::enc_callback, this);
 	}
 
 };
