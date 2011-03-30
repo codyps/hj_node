@@ -5,7 +5,8 @@
 #include <boost/thread.hpp>
 
 #include <hj_node/InfoPair.h>
-#include <hj_node/Motors.h>
+#include <hj_node/EncoderPair.h>
+#include <hj_node/MotorPair.h>
 #include <hj_node/PidKPair.h>
 
 #include <nodelet/nodelet.h>
@@ -19,10 +20,16 @@
 
 namespace hj_node {
 
-static void hj_enc_unpack(hj_node::Encoder *ep, struct hj_pktc_enc *er)
+static void hj_enc_unpack(hj_node::Encoder &ep, struct hj_pktc_enc *er)
 {
-	ep->pos = ntohl(er->p);
-	ep->neg = ntohl(er->n);
+	ep.pos = ntohl(er->p);
+	ep.neg = ntohl(er->n);
+}
+
+static void hj_enc2_unpack(hj_node::EncoderPair::Ptr &ep, struct hja_pkt_info *h)
+{
+	hj_enc_unpack(ep->encoders[0], &h->m[0].e);
+	hj_enc_unpack(ep->encoders[1], &h->m[1].e);
 }
 
 static void hj_info_unpack(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
@@ -30,7 +37,7 @@ static void hj_info_unpack(hj_node::InfoBase *i, struct hj_pktc_motor_info *h)
 	i->current = ntohs(h->current);
 	i->pwr = ntohs(h->pwr);
 	i->vel = ntohs(h->vel);
-	hj_enc_unpack(&i->enc, &h->e);
+	hj_enc_unpack(i->enc, &h->e);
 }
 
 #if 0
@@ -58,7 +65,7 @@ public:
 	virtual void onInit(void);
 
 private:
-	void direction_sub(const hj_node::Motors::ConstPtr &msg,
+	void direction_sub(const hj_node::MotorPair::ConstPtr &msg,
 		FILE *sf);
 	void recv_thread(FILE *sf);
 
@@ -77,7 +84,8 @@ private:
 	FILE *sf;
 	std::string serial_port;
 
-	ros::Publisher pub;
+	ros::Publisher pub_info;
+	ros::Publisher pub_encoders;
 	ros::Subscriber sub;
 };
 
@@ -98,15 +106,17 @@ void link_nodelet::onInit(void)
 		return;
 	}
 
-	sub = n.subscribe<hj_node::Motors>("motor_vel", 1,
+	this->sub = n.subscribe<hj_node::MotorPair>("motor_vel", 1,
 		boost::bind(&hj_node::link_nodelet::direction_sub, this, _1, sf));
-	pub = n.advertise<hj_node::InfoPair>("info", 1);
+	this->pub_info = n.advertise<hj_node::InfoPair>("info", 1);
+
+	this->pub_encoders = n.advertise<hj_node::EncoderPair>("encoders", 1);
 
 	boost::thread recv_th(&hj_node::link_nodelet::recv_thread, this, sf);
 }
 
 /* direction_sub - subscriber callback for a direction message */
-void link_nodelet::direction_sub(const hj_node::Motors::ConstPtr &msg,
+void link_nodelet::direction_sub(const hj_node::MotorPair::ConstPtr &msg,
 		FILE *sf)
 {
 	struct hjb_pkt_set_speed ss;
@@ -196,12 +206,17 @@ void link_nodelet::recv_thread(FILE *sf)
 			struct hja_pkt_info *inf = (typeof(inf)) buf;
 
 			/* publish it */
-			hj_node::InfoPairPtr ipd(new hj_node::InfoPair);
+			hj_node::InfoPair::Ptr ipd(new hj_node::InfoPair);
 			hj_info_unpack(&ipd->info[0], &inf->m[0]);
 			hj_info_unpack(&ipd->info[1], &inf->m[1]);
 
-			ipd->header.stamp = ros::Time::now();
-			this->pub.publish(ipd);
+			hj_node::EncoderPair::Ptr ep(new hj_node::EncoderPair);
+			hj_enc2_unpack(ep, inf);
+
+			ep->header.stamp = ipd->header.stamp = ros::Time::now();
+
+			this->pub_info.publish(ipd);
+			this->pub_encoders.publish(ep);
 
 			break;
 		}

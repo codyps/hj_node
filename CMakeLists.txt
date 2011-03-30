@@ -16,7 +16,6 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 #set the default path for built libraries to the "lib" directory
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
-#uncomment if you have defined messages
 rosbuild_genmsg()
 #uncomment if you have defined services
 #rosbuild_gensrv()
@@ -34,6 +33,7 @@ rosbuild_add_boost_directories()
 rosbuild_add_library(${PROJECT_NAME}
 	src/link.cc
 	src/encoder_to_odom.cc
+	src/twist_to_dd.cc
 
 	src/half_jackal/pc/frame_async.c
 	src/half_jackal/pc/term.c

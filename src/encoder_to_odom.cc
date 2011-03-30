@@ -159,10 +159,12 @@ public:
 			enc_to_dist(ep->encoders[0]),
 			enc_to_dist(ep->encoders[1])
 		};
+
 		this->dd_odom.update(this->drive_width, dist[0], dist[1], ep->header.stamp);
 
-
-		/* TODO: publish odom and odom transform */
+		/* publish odom and odom transform */
+		tb.sendTransform(*this->dd_odom.to_odom_trans(this->pos_cov, this->twist_cov));
+		this->odom_pub.publish(this->dd_odom.to_odom(this->pos_cov, this->twist_cov));
 	}
 
 	void onInit(void)

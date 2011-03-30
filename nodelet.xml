@@ -11,7 +11,14 @@
 		type="hj_node::encoder_to_odom"
 		base_class_type="nodelet::Nodelet">
 		<description>
-			Publish raw data from a half jackal.
+			Convert an EncoderPair to a Odometry and and odom transform.
+		</description>
+	</class>
+	<class name="hj_node/twist_to_dd"
+		type="hj_node::twist_to_dd"
+		base_class_type="nodelet::Nodelet">
+		<description>
+			Convert a TwistStamped to a MotorPair for differential drive.
 		</description>
 	</class>
 </library>
