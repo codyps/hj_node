@@ -18,7 +18,7 @@ public:
 	ros::Subscriber joy_sub;
 	ros::Publisher  mp_pub;
 
-	void joy_callback(geometry_msgs::TwistStamped::ConstPtr &t)
+	void joy_callback(const geometry_msgs::TwistStamped::ConstPtr &t)
 	{
 		hj_node::MotorPair::Ptr m(new hj_node::MotorPair);
 		//m->header = t->header;
