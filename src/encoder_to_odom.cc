@@ -3,127 +3,20 @@
  */
 
 #include <ros/ros.h>
-
-#include <tf/transform_broadcaster.h>
-#include <nav_msgs/Odometry.h>
-#include <geometry_msgs/Quaternion.h>
-
-#include <hj_node/types.h>
-#include <hj_node/param_array.h>
-
-#include <hj_node/EncoderPair.h>
-
 #include <nodelet/nodelet.h>
 #include <pluginlib/class_list_macros.h>
 
+#include <hj_node/diff_drive_util.h>
+#include <hj_node/types.h>
+#include <hj_node/param_array.h>
+
+#include <tf/transform_broadcaster.h>
+
+#include <nav_msgs/Odometry.h>
+#include <geometry_msgs/Quaternion.h>
+#include <hj_node/EncoderPair.h>
+
 namespace hj_node {
-
-class diff_drive_odom {
-public:
-	diff_drive_odom()
-	: x(0)
-	, y(0)
-	, theta(0)
-	, vel_x(0)
-	, dx(0)
-	, dy(0)
-	, dtheta(0)
-	, time(ros::Time::now())
-	{}
-
-	double x;
-	double y;
-	double theta;
-
-	double vel_x;
-
-	double dx;
-	double dy;
-	double dtheta;
-
-	ros::Time time;
-
-	geometry_msgs::Quaternion odom_quat;
-
-	void update(double drive_dia,
-			double lt_dist, double rt_dist,
-			ros::Time cur_time)
-	{
-		double px = this->x;
-		double py = this->y;
-		double ptheta = this->theta;
-
-		double dist = (lt_dist + rt_dist) / 2;
-
-		this->theta += (rt_dist - lt_dist) / drive_dia;
-		this->theta = fmod(this->theta, (2 * M_PI));
-		this->x += cos(this->theta) * dist;
-		this->y += sin(this->theta) * dist;
-
-		double dt = (cur_time - this->time).toSec();
-		this->time = cur_time;
-
-		this->dx = (px - this->x) / dt;
-		this->dy = (py - this->y) / dt;
-		this->dtheta = (ptheta - this->theta) / dt;
-		this->vel_x = dist / dt;
-
-		this->odom_quat =
-			tf::createQuaternionMsgFromYaw(this->theta);
-	}
-
-	nav_msgs::Odometry::Ptr to_odom(Covariance &pos_cov,
-			Covariance &twist_cov)
-	{
-		nav_msgs::Odometry::Ptr op(new nav_msgs::Odometry);
-
-		op->header.stamp = this->time;
-		op->header.frame_id = "some_frame";
-
-		op->pose.covariance = pos_cov;
-		op->twist.covariance = twist_cov;
-
-		op->pose.pose.position.x = this->x;
-		op->pose.pose.position.y = this->y;
-		op->pose.pose.position.z = 0;
-
-		op->pose.pose.orientation = odom_quat;
-
-		op->twist.twist.linear.x = this->vel_x;
-		op->twist.twist.linear.y = 0;
-		op->twist.twist.linear.z = 0;
-
-		op->twist.twist.angular.x = 0;
-		op->twist.twist.angular.y = 0;
-		op->twist.twist.angular.z = this->dtheta;
-
-		return op;
-	}
-
-	geometry_msgs::TransformStamped::Ptr to_odom_trans(Covariance &pos_cov,
-			Covariance &twist_cov)
-	{
-		geometry_msgs::TransformStamped::Ptr ts(
-				new geometry_msgs::TransformStamped);
-
-		ts->header.stamp = this->time;
-		ts->header.frame_id = "odom";
-		ts->child_frame_id = "base_link";
-
-		ts->transform.translation.x = this->x;
-		ts->transform.translation.y = this->y;
-		ts->transform.translation.z = 0;
-
-		ts->transform.rotation = this->odom_quat;
-
-		return ts;
-	}
-};
-
-static double calc_dist_per_tick(double ticks_per_rev, double dist_per_rev)
-{
-	return ticks_per_rev / dist_per_rev;
-}
 
 class encoder_to_odom : public nodelet::Nodelet {
 
@@ -134,37 +27,31 @@ public:
 	ros::Publisher odom_pub;
 	ros::Subscriber enc_sub;
 
-	diff_drive_odom dd_odom;
+	encoder_converter encs[2];
 
-	Covariance pos_cov;
-	Covariance twist_cov;
+	diff_drive_odom dd_odom;
 
 	tf::TransformBroadcaster tb;
 
 	double drive_width;
 
-	/* encoder stuff */
-	double ticks_per_rev;
-	double wheel_dia;
-	double dist_per_tick;
-
-	double enc_to_dist(const hj_node::Encoder &e)
+	double enc_val(const hj_node::Encoder &e)
 	{
-		return ((double)e.pos - e.neg) * this->dist_per_tick;
+		return ((double)e.pos - e.neg);
 	}
 
 	void enc_callback(const hj_node::EncoderPair::ConstPtr& ep)
 	{
 		double dist[2] = {
-			enc_to_dist(ep->encoders[0]),
-			enc_to_dist(ep->encoders[1])
+			encs[0].ticks_to_dist(enc_val(ep->encoders[0])),
+			encs[1].ticks_to_dist(enc_val(ep->encoders[1]))
 		};
 
 		this->dd_odom.update(this->drive_width, dist[0], dist[1], ep->header.stamp);
 
 		/* publish odom and odom transform */
-		tb.sendTransform(*this->dd_odom.to_odom_trans(this->pos_cov, this->twist_cov));
-		this->odom_pub.publish(this->dd_odom.to_odom(this->pos_cov, this->twist_cov));
+		tb.sendTransform(*this->dd_odom.to_odom_trans());
+		this->odom_pub.publish(this->dd_odom.to_odom());
 	}
 
 	void onInit(void)
@@ -172,6 +59,7 @@ public:
 		this->n      = getNodeHandle();
 		this->n_priv = getPrivateNodeHandle();
 
+		Covariance pos_cov, twist_cov;
 		if (!getParam_array(n_priv, "pos_cov", pos_cov)) {
 			NODELET_ERROR("pos_cov not provided.");
 			return;
@@ -187,17 +75,22 @@ public:
 			return;
 		}
 
-		if (n_priv.getParam("ticks_per_rev", this->ticks_per_rev)) {
+		double ticks_per_rev, dist_per_rev;
+		if (n_priv.getParam("ticks_per_rev", ticks_per_rev)) {
 			NODELET_ERROR("ticks_per_rev not provided.");
 			return;
 		}
 
-		if (n_priv.getParam("wheel_dia", this->wheel_dia)) {
+		if (n_priv.getParam("dist_per_rev", dist_per_rev)) {
 			NODELET_ERROR("wheel_dia not provided.");
 			return;
 		}
 
-		this->dist_per_tick = calc_dist_per_tick(this->ticks_per_rev, this->wheel_dia);
+		encs[0].init(ticks_per_rev, dist_per_rev);
+		encs[1].init(ticks_per_rev, dist_per_rev);
+
+		dd_odom.set_twist_cov(twist_cov);
+		dd_odom.set_pos_cov(pos_cov);
 
 		NODELET_DEBUG("got cov.");
 

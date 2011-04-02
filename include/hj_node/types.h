@@ -1,11 +1,9 @@
 #ifndef HJ_NODE_TYPES_H_
 #define HJ_NODE_TYPES_H_
 
+#ifdef __cplusplus
 //typedef double Covariance[36];
 typedef boost::array<double, 36> Covariance;
-
-
-#ifdef __cplusplus
 
 template <typename T, size_t N>
 inline
