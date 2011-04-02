@@ -12,8 +12,7 @@ namespace hj_node {
 
 class twist_to_dd : public nodelet::Nodelet {
 public:
-	ros::NodeHandle n;
-	ros::NodeHandle n_priv;
+	double drive_width;
 
 	ros::Subscriber joy_sub;
 	ros::Publisher  mp_pub;
@@ -21,7 +20,7 @@ public:
 	void joy_callback(const geometry_msgs::TwistStamped::ConstPtr &t)
 	{
 		hj_node::MotorPair::Ptr m(new hj_node::MotorPair);
-		//m->header = t->header;
+		m->header = t->header;
 
 		m->vel[0] = 0;
 		m->vel[1] = 1;
@@ -31,8 +30,13 @@ public:
 
 	void onInit(void)
 	{
-		this->n      = getNodeHandle();
-		this->n_priv = getPrivateNodeHandle();
+		ros::NodeHandle &n = getNodeHandle();
+		ros::NodeHandle &n_priv = getPrivateNodeHandle();
+
+		if (!n_priv.getParam("drive_width", this->drive_width)) {
+			NODELET_ERROR("drive width not specified.");
+			return;
+		}
 
 		this->joy_sub = n.subscribe("joystick", 1,
 				&::hj_node::twist_to_dd::joy_callback, this);
